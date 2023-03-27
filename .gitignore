@@ -1,0 +1,13 @@
+**/target
+test-output/
+.sbtopts
+project/.sbt
+test-output/
+.bloop
+.metals
+project/metals.sbt
+.idea
+.bsp
+coursier
+**/.DS_Store
+publish.sbt

@@ -1,4 +1,4 @@
-package com.sergeiionin
+package com.sergeiionin.producer
 
 import cats.effect.kernel.Concurrent
 import cats.effect.{Async, Resource}
@@ -12,10 +12,6 @@ object ProducerServicePlainImpl {
     val keySerializer = Serializer.apply[F, K]
     val valueSerializer = Serializer.apply[F, V]
     val producerSettings = ProducerSettings.apply(keySerializer, valueSerializer).withProperties(props)
-    KafkaProducer.resource(producerSettings).map(new ProducerServicePlainImpl(_))
-  }
-  def make[F[_]: Async, K, V](producerSettings: ProducerSettings[F, K, V])(implicit serializerK: Serializer[F, K],
-                                serializerV: Serializer[F, V]): Resource[F, ProducerService[F, K, V]] = {
     KafkaProducer.resource(producerSettings).map(new ProducerServicePlainImpl(_))
   }
 }

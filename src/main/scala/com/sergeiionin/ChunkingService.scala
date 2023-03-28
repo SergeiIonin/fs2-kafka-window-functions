@@ -1,9 +1,9 @@
 package com.sergeiionin
 
-import com.sergeiionin.windowfuncs.windowfuncs.ChunkedRecord
+import fs2.kafka.CommittableConsumerRecord
 
 trait ChunkingService[F[_], K, V] {
 
-  def addToChunks(cr: ChunkedRecord[F, K, V]): F[Unit]
+  def addToChunks(cr: CommittableConsumerRecord[F, K, V]): F[Unit]
 
 }

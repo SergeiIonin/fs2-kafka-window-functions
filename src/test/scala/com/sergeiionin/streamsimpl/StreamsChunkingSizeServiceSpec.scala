@@ -3,6 +3,7 @@ package com.sergeiionin.streamsimpl
 import cats.effect.unsafe.implicits.global
 import cats.effect.{Async, IO, Ref, Resource}
 import cats.implicits.{catsSyntaxApplicativeId, toFunctorOps}
+import com.sergeiionin.StreamCollectorService
 import com.sergeiionin.streamsimpl.Domain.TestRecord
 import com.sergeiionin.streamsimpl.StreamsChunkingSizeServiceSpec.StreamCollectorServiceChunkSizeImpl
 import fs2.Chunk

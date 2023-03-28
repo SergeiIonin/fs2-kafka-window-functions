@@ -1,4 +1,4 @@
-package com.sergeiionin.streamsimpl
+package com.sergeiionin
 
 import cats.effect.std.Semaphore
 import cats.effect.{Async, Ref}
@@ -7,6 +7,7 @@ import cats.syntax.flatMap._
 import fs2.Chunk
 import wvlet.log.Logger
 
+// fixme make it more time-windows specific
 abstract class StreamCollectorService[F[_] : Async, R](implicit logger: Logger) {
   val state: Ref[F, Chunk[R]]
   val addCond: R => F[Boolean]

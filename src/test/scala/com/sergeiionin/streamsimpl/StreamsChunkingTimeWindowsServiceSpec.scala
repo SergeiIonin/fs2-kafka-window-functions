@@ -5,7 +5,7 @@ import cats.effect.{Async, IO, Ref, Resource}
 import cats.implicits.toFunctorOps
 import cats.syntax.flatMap._
 import com.sergeiionin.StreamCollectorService
-import com.sergeiionin.streamsimpl.Domain.TestRecord
+import com.sergeiionin.Domain.TestRecord
 import com.sergeiionin.streamsimpl.StreamsChunkingTimeWindowsServiceSpec.StreamCollectorServiceTimeWindowsImpl
 import fs2.Chunk
 import org.scalatest.flatspec.AnyFlatSpec

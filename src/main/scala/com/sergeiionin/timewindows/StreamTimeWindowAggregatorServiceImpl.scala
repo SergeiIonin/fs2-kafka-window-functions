@@ -13,6 +13,10 @@ import cats.syntax.flatMap._
 // start_time = min(start_time) among all partitions
 // end_time = start_time + window_size
 // 3) records are coming with the lag and we need to process them as well
+// 4) how exactly to merge records from different partitions?
+// 5) if the records aren't coming very long, we should set timeRef to 0 so that next record will set it again, then
+// how and when to set timeRef to 0?
+// 6) also there's a chance that the release action won't be triggered for a very long time
 
 class StreamTimeWindowAggregatorServiceImpl[F[_] : Async, K, V](chunkStateRef: Ref[F, Chunk[CommittableConsumerRecord[F, K, V]]],
                                                      timeRef: Ref[F, Long],
@@ -55,10 +59,12 @@ object StreamTimeWindowAggregatorServiceImpl {
 
   def make[F[_] : Async, K, V](durationMillis: Long, onRelease: Chunk[CommittableConsumerRecord[F, K, V]] => F[Unit])
                         (implicit logger: Logger): Resource[F, StreamTimeWindowAggregatorServiceImpl[F, K, V]] = {
-    Resource.eval(for {
+    Resource.make(for {
       stateRef <- Async[F].ref(Chunk.empty[CommittableConsumerRecord[F, K, V]])
       timeRef <- Async[F].ref(0L)
-    } yield new StreamTimeWindowAggregatorServiceImpl(stateRef, timeRef, durationMillis, onRelease) {})
+    } yield new StreamTimeWindowAggregatorServiceImpl(stateRef, timeRef, durationMillis, onRelease) {})(
+      service => service.chunkState.modify(chunk => Chunk() -> onRelease(chunk)).flatten
+    )
   }
 
 }

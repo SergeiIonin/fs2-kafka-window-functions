@@ -21,12 +21,13 @@ abstract class StreamTimeWindowAggregatorService[F[_] : Async, R](implicit logge
       mutex         <- mutexF
       _             <- mutex.acquire
       cond          <- addCond(rec)
-      _             = logger.info(s"cond for $rec is $cond")
+      //_             = logger.info(s"cond for $rec is $cond")
       chunk         <- chunkState.get
       chunkUpd      = if (cond) chunk ++ Chunk(rec) else chunk
-      _             = logger.info(s"chunkUpd = $chunkUpd")
+      _             = logger.info(s"chunkUpd size = ${chunkUpd.size}")
       shouldRelease <- releaseCond(rec) // if the rec is obsolete, then it's just discarded (or may be sent to some queue)
-      _             = logger.info(s"should release $chunkUpd is $shouldRelease")
+      _ = if (!cond && !shouldRelease) logger.info(s"the record is abnormal") else ()
+      _ = logger.info(s"should release chunk of the size ${chunkUpd.size} is $shouldRelease")
       update        = if (shouldRelease) {
                         Chunk.singleton(rec) -> onRelease(chunkUpd)
                       } else {

@@ -21,16 +21,13 @@ class StreamTimeWindowAggregatorServiceImplSpec extends AnyFlatSpec with Matcher
 
   implicit val l: Logger = logger
 
-  def produceEveryNmillis(amountLeft: Int, index: Int, millis: FiniteDuration,
+  def produceEveryNmillis(amountLeft: Int, index: Int = 0, millis: FiniteDuration,
                           producer: ProducerService[IO, String, String],
                           topic: String): IO[Unit] = {
     for {
-      rEff <- producer.produce(topic, s"key-$index", s"value-$index")
-      r <- rEff
-      recs = r.records.toList
-      _ <- log(s"records produced are ${recs.map(_._1.key)} -> ${recs.map(_._2.timestamp())}")
+      _ <- producer.produce(topic, s"key-$index", s"value-$index")
       _ <- IO.sleep(millis)
-      _ <- IO.whenA(amountLeft != 0)(produceEveryNmillis(amountLeft - 1, index + 1, millis, producer, topic))
+      _ <- IO.whenA(amountLeft != 1)(produceEveryNmillis(amountLeft - 1, index + 1, millis, producer, topic))
     } yield ()
   }
 
@@ -38,6 +35,7 @@ class StreamTimeWindowAggregatorServiceImplSpec extends AnyFlatSpec with Matcher
 
   "Chunking Service" should "aggregate records within a timeframe and count the number of records within each frame" in {
     val timeWindowSizeMillis = 200L
+    val numOfMsgs = 100
 
     val kafkaContainer = KafkaContainer()
 
@@ -76,17 +74,17 @@ class StreamTimeWindowAggregatorServiceImplSpec extends AnyFlatSpec with Matcher
       )
     } yield (producerService, consumerService, aggregatorService)).use {
       case (producer, consumer, aggregatorService) =>
-        produceEveryNmillis(100, 0, 20.millis, producer, topic)
-          .racePair(consumer.subscribe(NonEmptyList.one(topic)) >>
+        produceEveryNmillis(numOfMsgs, millis = 20.millis, producer = producer, topic = topic) >>
+          consumer.subscribe(NonEmptyList.one(topic)) >>
             consumer.getStream().evalTap(rec => {
               //log(s"record consumed = ${rec.record.key}") >>
               aggregatorService.addToChunk(rec)
             })
-              .map(r => r.offset)
-              .through(commitBatchWithin(100, 1.second)).compile.drain)
+            .map(r => r.offset)
+            .through(commitBatchWithin(100, 1.second)).interruptAfter(5.second).compile.drain
     }.unsafeRunSync()
 
-    val list = buf.toList.sortBy {
+    val list: List[(Long, List[Long])] = buf.toList.sortBy {
       case (t, _) => t
     }.map {
       case (t, chunk) => t -> chunk.map(_.record.timestamp.createTime.get).toList
@@ -110,6 +108,8 @@ class StreamTimeWindowAggregatorServiceImplSpec extends AnyFlatSpec with Matcher
         println(s"diff between last and first records timestamps = $diff")
         diff <= timeWindowSizeMillis shouldBe true
     }
+
+    list.foldLeft(0)((next, acc) => next + acc._2.size) shouldBe numOfMsgs
 
   }
 

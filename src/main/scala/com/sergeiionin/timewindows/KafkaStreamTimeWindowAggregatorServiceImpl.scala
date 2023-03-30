@@ -1,15 +1,11 @@
 package com.sergeiionin.timewindows
 
-import cats.effect.implicits.genSpawnOps
 import cats.effect.kernel.Spawn
 import cats.effect.{Async, Ref, Resource}
-import cats.implicits.{catsSyntaxApplicativeId, toTraverseOps}
 import cats.syntax.flatMap._
 import fs2.Chunk
 import fs2.kafka.CommittableConsumerRecord
 import wvlet.log.Logger
-
-import scala.concurrent.duration.{FiniteDuration, MILLISECONDS}
 
 // fixme we need to also address the following issues
 // 1) the record(s) are coming much later than the current start
@@ -51,25 +47,6 @@ object KafkaStreamTimeWindowAggregatorServiceImpl {
   def make[F[_] : Async, K, V](durationMillis: Long, onRelease: Chunk[CommittableConsumerRecord[F, K, V]] => F[Unit])
                         (implicit logger: Logger): Resource[F, KafkaStreamTimeWindowAggregatorServiceImpl[F, K, V]] = {
 
-    def clearingStreamResource(chunksRef: Ref[F, Map[Long, Chunk[CommittableConsumerRecord[F, K, V]]]], startRef: Ref[F, Long]) =
-      fs2.Stream.awakeEvery(FiniteDuration(durationMillis * 10, MILLISECONDS))
-        .evalMap(_ =>
-          chunksRef.modify { chunksMap => {
-            val keysSortedAsc = chunksMap.keySet.toList.sorted
-            val keyLeft = keysSortedAsc.lastOption
-            val mapChunksReleasing = keyLeft.fold(Map.empty[Long, Chunk[CommittableConsumerRecord[F, K, V]]])(key => chunksMap.removed(key))
-            val chunksMapUpd = keyLeft.fold(Map.empty[Long, Chunk[CommittableConsumerRecord[F, K, V]]])(key => Map(key -> chunksMap(key)))
-
-            chunksMapUpd -> {
-              logger.info(s"${System.currentTimeMillis()} in the clearing stream").pure[F]
-              mapChunksReleasing.values.toList.traverse(onRelease)
-            }
-          }
-          }.flatten
-        ).compile.drain.background
-          .onFinalize(logger.info(s"the clearing stream was terminated").pure[F]) // why this message pops up in the beginning???
-          .onCancel(Resource.eval(logger.info(s"the clearing stream was canceled").pure[F])) // why this message (also, like the one above) pops up in the beginning???
-
     def mainResource(chunksRef: Ref[F, Map[Long, Chunk[CommittableConsumerRecord[F, K, V]]]],
                      startRef: Ref[F, Long]): Resource[F, KafkaStreamTimeWindowAggregatorServiceImpl[F, K, V]] =
         Resource.pure(new KafkaStreamTimeWindowAggregatorServiceImpl(chunksRef, startRef, durationMillis, onRelease))
@@ -77,8 +54,8 @@ object KafkaStreamTimeWindowAggregatorServiceImpl {
     for {
       chunksRef   <- Resource.eval(Async[F].ref(Map.empty[Long, Chunk[CommittableConsumerRecord[F, K, V]]]))
       startRef    <- Resource.eval(Async[F].ref(0L))
-      _          <- clearingStreamResource(chunksRef, startRef)
-      main       <- mainResource(chunksRef, startRef)
+      _           <- StreamTimeWindowAggregatorService.clearingStreamResource(durationMillis, chunksRef, onRelease)
+      main        <- mainResource(chunksRef, startRef)
     } yield main
 
   }

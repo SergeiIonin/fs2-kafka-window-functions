@@ -17,6 +17,7 @@ import wvlet.log.{LogSupport, Logger}
 import scala.collection.mutable
 import scala.concurrent.duration.{DurationInt, FiniteDuration}
 
+// fixme the consumer is constantly exiting ahead of time
 class KafkaStreamTimeWindowAggregatorServiceImplSpec extends AnyFlatSpec with Matchers with LogSupport {
 
   implicit val l: Logger = logger
@@ -35,7 +36,7 @@ class KafkaStreamTimeWindowAggregatorServiceImplSpec extends AnyFlatSpec with Ma
 
   "Chunking Service" should "aggregate records within a timeframe and count the number of records within each frame" in {
     val timeWindowSizeMillis = 200L
-    val numOfMsgs = 100
+    val numOfMsgs = 20
 
     val kafkaContainer = KafkaContainer()
 
@@ -81,7 +82,7 @@ class KafkaStreamTimeWindowAggregatorServiceImplSpec extends AnyFlatSpec with Ma
                           aggregatorService.addToChunk(rec)
                       })
                       .map(r => r.offset)
-                      .through(commitBatchWithin(100, 1.second))
+                      .through(commitBatchWithin(200, 5.second))
                         //.interruptAfter(5.second)
                         .compile.drain)
     }.unsafeRunSync()

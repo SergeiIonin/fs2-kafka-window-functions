@@ -2,9 +2,7 @@ package com.sergeiionin.timewindows
 
 import cats.data.NonEmptyList
 import cats.effect.IO
-import cats.effect.kernel.Resource
 import cats.effect.unsafe.implicits.global
-import com.dimafeng.testcontainers.KafkaContainer
 import com.sergeiionin.consumer.KafkaConsumerService
 import com.sergeiionin.producer.{ProducerService, ProducerServicePlainImpl}
 import fs2.Chunk
@@ -17,7 +15,7 @@ import wvlet.log.{LogSupport, Logger}
 import scala.collection.mutable
 import scala.concurrent.duration.{DurationInt, FiniteDuration}
 
-class StreamTimeWindowAggregatorServiceImplSpec extends AnyFlatSpec with Matchers with LogSupport {
+class KafkaStreamTimeWindowAggregatorServiceImplKafkaLocalSpec extends AnyFlatSpec with Matchers with LogSupport {
 
   implicit val l: Logger = logger
 
@@ -37,15 +35,7 @@ class StreamTimeWindowAggregatorServiceImplSpec extends AnyFlatSpec with Matcher
     val timeWindowSizeMillis = 200L
     val numOfMsgs = 100
 
-    val kafkaContainer = KafkaContainer()
-
-    val kafkaResource: Resource[IO, KafkaContainer] = Resource.make(IO.delay {
-      kafkaContainer.start()
-      kafkaContainer
-    })(container => {
-      IO.delay(container.stop())
-    })
-    val topic = "topic-0"
+    val topic = s"topic-${System.currentTimeMillis()}"
     val buf = mutable.Map[Long, Chunk[CommittableConsumerRecord[IO, String, String]]]()
 
     def onRelease(chunk: Chunk[CommittableConsumerRecord[IO, String, String]]): IO[Unit] = IO {
@@ -55,21 +45,22 @@ class StreamTimeWindowAggregatorServiceImplSpec extends AnyFlatSpec with Matcher
       } else ()
     }
 
-    /*,
-              "key.deserializer" -> "org.apache.kafka.common.serialization.StringDeserializer",
-              "value.deserializer" -> "org.apache.kafka.common.serialization.StringDeserializer"*/
+    val groupId = s"test-group-${System.currentTimeMillis()}"
 
-    (for {
-      kafkaContainer  <- kafkaResource
-      props = Map("bootstrap.servers" -> kafkaContainer.bootstrapServers)
-      propsProd = props ++ Map("key.serializer" -> "org.apache.kafka.common.serialization.StringSerializer",
-        "value.serializer" -> "org.apache.kafka.common.serialization.StringSerializer")
-      propsCons = props ++ Map("group.id" -> "test_group_1", "auto.offset.reset" -> "earliest",
+    val props = Map("bootstrap.servers" -> "PLAINTEXT://localhost:9092")
+    val propsProd = props ++ Map("key.serializer" -> "org.apache.kafka.common.serialization.StringSerializer",
+                                 "value.serializer" -> "org.apache.kafka.common.serialization.StringSerializer")
+    val propsCons = props ++
+      Map("group.id" -> groupId,
+        //"auto.offset.reset" -> "latest",
+        "auto.offset.reset" -> "earliest",
         "key.deserializer" -> "org.apache.kafka.common.serialization.StringDeserializer",
         "value.deserializer" -> "org.apache.kafka.common.serialization.StringDeserializer")
+
+    (for {
       producerService <- ProducerServicePlainImpl.make[IO, String, String](propsProd)
       consumerService <- KafkaConsumerService.make[IO, String, String](propsCons)
-      aggregatorService <- StreamTimeWindowAggregatorServiceImpl.make(
+      aggregatorService <- KafkaStreamTimeWindowAggregatorServiceImpl.make(
         durationMillis = timeWindowSizeMillis, onRelease = onRelease
       )
     } yield (producerService, consumerService, aggregatorService)).use {

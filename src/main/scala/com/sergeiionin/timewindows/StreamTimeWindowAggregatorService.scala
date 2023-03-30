@@ -9,8 +9,8 @@ import wvlet.log.Logger
 
 abstract class StreamTimeWindowAggregatorService[F[_] : Async, R](implicit logger: Logger) {
 
-  val chunkState: Ref[F, Chunk[R]]
-  def addCond(rec: R): F[Boolean]
+  val chunkState: Ref[F, Map[Long, Chunk[R]]]
+  def getStateKey(rec: R): F[Long]
 
   private val mutexF = Semaphore.apply(1)
 
@@ -18,36 +18,13 @@ abstract class StreamTimeWindowAggregatorService[F[_] : Async, R](implicit logge
     for {
       mutex         <- mutexF
       _             <- mutex.acquire
-      cond          <- addCond(rec)
-      _ = logger.info(s"condition for ${rec} is $cond")
-      _             <- chunkState.update(chunk => {
-                          if (cond) {
-                            logger.info(s"chunk size = ${chunk.size}")
-                            chunk ++ Chunk(rec)
-                          } else chunk
+      key           <- getStateKey(rec)
+      _             = logger.info(s"record will be attributed to the key $key")
+      _             <- chunkState.update(chunksMap => {
+                          val currentChunk = chunksMap.getOrElse(key, Chunk.empty[R])
+                          chunksMap.updated(key, currentChunk ++ Chunk(rec))
                        })
       _             <- mutex.release
     } yield ()
-  /*
-  def addToChunk(rec: R): F[Unit] =
-    for {
-      mutex         <- mutexF
-      _             <- mutex.acquire
-      cond          <- addCond(rec)
-      //_             = logger.info(s"cond for $rec is $cond")
-      chunk         <- chunkState.get
-      chunkUpd      = if (cond) chunk ++ Chunk(rec) else chunk
-      _             = logger.info(s"chunkUpd size = ${chunkUpd.size}")
-      shouldRelease <- releaseCond(rec) // if the rec is obsolete, then it's just discarded (or may be sent to some queue)
-      _ = if (!cond && !shouldRelease) logger.info(s"the record is abnormal") else ()
-      _ = logger.info(s"should release chunk of the size ${chunkUpd.size} is $shouldRelease")
-      update        = if (shouldRelease) {
-                        Chunk.singleton(rec) -> onRelease(chunkUpd)
-                      } else {
-                        chunkUpd -> ().pure[F]
-                      }
-      _             <- chunkState.modify(_ => update).flatten
-      _             <- mutex.release
-    } yield ()*/
 
 }

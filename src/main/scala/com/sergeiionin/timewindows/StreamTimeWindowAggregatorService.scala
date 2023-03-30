@@ -2,7 +2,7 @@ package com.sergeiionin.timewindows
 
 import cats.effect.std.Semaphore
 import cats.effect.{Async, Ref}
-import cats.implicits.{catsSyntaxApplicativeId, toFunctorOps}
+import cats.implicits.toFunctorOps
 import cats.syntax.flatMap._
 import fs2.Chunk
 import wvlet.log.Logger
@@ -11,11 +11,24 @@ abstract class StreamTimeWindowAggregatorService[F[_] : Async, R](implicit logge
 
   val chunkState: Ref[F, Chunk[R]]
   def addCond(rec: R): F[Boolean]
-  def releaseCond(rec: R): F[Boolean]
-  def onRelease(chunk: Chunk[R]): F[Unit]
 
   private val mutexF = Semaphore.apply(1)
 
+  def addToChunk(rec: R): F[Unit] =
+    for {
+      mutex         <- mutexF
+      _             <- mutex.acquire
+      cond          <- addCond(rec)
+      _ = logger.info(s"condition for ${rec} is $cond")
+      _             <- chunkState.update(chunk => {
+                          if (cond) {
+                            logger.info(s"chunk size = ${chunk.size}")
+                            chunk ++ Chunk(rec)
+                          } else chunk
+                       })
+      _             <- mutex.release
+    } yield ()
+  /*
   def addToChunk(rec: R): F[Unit] =
     for {
       mutex         <- mutexF
@@ -35,6 +48,6 @@ abstract class StreamTimeWindowAggregatorService[F[_] : Async, R](implicit logge
                       }
       _             <- chunkState.modify(_ => update).flatten
       _             <- mutex.release
-    } yield ()
+    } yield ()*/
 
 }

@@ -22,20 +22,16 @@ class WindowFuncsSpec extends AnyFlatSpec with Matchers with LogSupport {
 
   implicit val l: Logger = logger
 
-  def produceEveryNmillis(
-    amountLeft: Int,
-    index:      Int,
-    millis:     FiniteDuration,
-    producer:   ProducerService[IO, String, String],
-    topic:      String,
-  ): IO[Unit] = {
+  def produceEveryNmillis(amountLeft: Int, index: Int, millis: FiniteDuration,
+                          producer: ProducerService[IO, String, String],
+                          topic: String): IO[Unit] = {
     for {
       rEff <- producer.produce(topic, s"key-$index", s"value-$index")
-      r    <- rEff
-      recs  = r.records.toList
-      _    <- log(s"records produced are ${recs.map(_._1.key)} -> ${recs.map(_._2.timestamp())}")
-      _    <- IO.sleep(millis)
-      _    <- IO.whenA(amountLeft != 0)(produceEveryNmillis(amountLeft - 1, index + 1, millis, producer, topic))
+      r <- rEff
+      recs = r.records.toList
+      _ <- log(s"records produced are ${recs.map(_._1.key)} -> ${recs.map(_._2.timestamp())}")
+      _ <- IO.sleep(millis)
+      _ <- IO.whenA(amountLeft != 0)(produceEveryNmillis(amountLeft - 1, index + 1, millis, producer, topic))
     } yield ()
   }
 
@@ -46,22 +42,20 @@ class WindowFuncsSpec extends AnyFlatSpec with Matchers with LogSupport {
 
     val kafkaContainer = KafkaContainer()
 
-    val kafkaResource: Resource[IO, KafkaContainer] =
-      Resource.make(IO.delay {
-        kafkaContainer.start()
-        kafkaContainer
-      })(container => {
-        IO.delay(container.stop())
-      })
-    val topic                                       = "topic-0"
-    val buf                                         = mutable.Map[Long, Chunk[CommittableConsumerRecord[IO, String, String]]]()
+    val kafkaResource: Resource[IO, KafkaContainer] = Resource.make(IO.delay {
+      kafkaContainer.start()
+      kafkaContainer
+    })(container => {
+      IO.delay(container.stop())
+    })
+    val topic = "topic-0"
+    val buf = mutable.Map[Long, Chunk[CommittableConsumerRecord[IO, String, String]]]()
 
     def onRelease(chunk: Chunk[CommittableConsumerRecord[IO, String, String]]): IO[Unit] = IO {
       if (chunk.nonEmpty) {
         buf.addOne(chunk.head.get.record.timestamp.createTime.get -> chunk)
         ()
-      } else
-        ()
+      } else ()
     }
 
     /*,
@@ -69,48 +63,35 @@ class WindowFuncsSpec extends AnyFlatSpec with Matchers with LogSupport {
               "value.deserializer" -> "org.apache.kafka.common.serialization.StringDeserializer"*/
 
     (for {
-      kafkaContainer   <- kafkaResource
-      props             = Map("bootstrap.servers" -> kafkaContainer.bootstrapServers)
-      propsProd         =
-        props ++ Map(
-          "key.serializer"   -> "org.apache.kafka.common.serialization.StringSerializer",
-          "value.serializer" -> "org.apache.kafka.common.serialization.StringSerializer",
-        )
-      propsCons         =
-        props ++ Map(
-          "group.id"           -> "test_group_1",
-          "auto.offset.reset"  -> "earliest",
-          "key.deserializer"   -> "org.apache.kafka.common.serialization.StringDeserializer",
-          "value.deserializer" -> "org.apache.kafka.common.serialization.StringDeserializer",
-        )
-      producerService  <- ProducerServicePlainImpl.make[IO, String, String](propsProd)
-      consumerService  <- KafkaConsumerService.make[IO, String, String](propsCons)
+      kafkaContainer  <- kafkaResource
+      props = Map("bootstrap.servers" -> kafkaContainer.bootstrapServers)
+      propsProd = props ++ Map("key.serializer" -> "org.apache.kafka.common.serialization.StringSerializer",
+        "value.serializer" -> "org.apache.kafka.common.serialization.StringSerializer")
+      propsCons = props ++ Map("group.id" -> "test_group_1", "auto.offset.reset" -> "earliest",
+                               "key.deserializer" -> "org.apache.kafka.common.serialization.StringDeserializer",
+                               "value.deserializer" -> "org.apache.kafka.common.serialization.StringDeserializer")
+      producerService <- ProducerServicePlainImpl.make[IO, String, String](propsProd)
+      consumerService <- KafkaConsumerService.make[IO, String, String](propsCons)
       collectorService <- CollectorServiceTimeWindowsImpl.make(
-                            durationMillis = timeWindowSizeMillis,
-                            onRelease = onRelease,
-                          )
-      chunkingService  <- ChunkingServiceImpl.make(List(collectorService))
-    } yield (producerService, consumerService, chunkingService))
-      .use { case (producer, consumer, chunkingService) =>
-        produceEveryNmillis(100, 0, 20.millis, producer, topic)
-          .racePair(
-            consumer.subscribe(NonEmptyList.one(topic)) >>
-              consumer
-                .getStream()
-                .evalTap(rec => {
-                  // log(s"record consumed = ${rec.record.key}") >>
-                  chunkingService.addToChunks(rec)
-                })
+        durationMillis = timeWindowSizeMillis, onRelease = onRelease
+      )
+      chunkingService <- ChunkingServiceImpl.make(List(collectorService))
+    } yield (producerService, consumerService, chunkingService)).use {
+        case (producer, consumer, chunkingService) =>
+          produceEveryNmillis(100, 0, 20.millis, producer, topic)
+            .racePair(consumer.subscribe(NonEmptyList.one(topic)) >>
+              consumer.getStream().evalTap(rec => {
+                //log(s"record consumed = ${rec.record.key}") >>
+                chunkingService.addToChunks(rec)
+              })
                 .map(r => r.offset)
-                .through(commitBatchWithin(100, 1.second))
-                .compile
-                .drain
-          )
-      }
-      .unsafeRunSync()
+                .through(commitBatchWithin(100, 1.second)).compile.drain)
+      }.unsafeRunSync()
 
-    val list = buf.toList.sortBy { case (t, _) => t }.map { case (t, chunk) =>
-      t -> chunk.map(_.record.timestamp.createTime.get).toList
+    val list = buf.toList.sortBy {
+      case (t, _) => t
+    }.map {
+      case (t, chunk) => t -> chunk.map(_.record.timestamp.createTime.get).toList
     }
 
     val keys = list.map(_._1)
@@ -118,7 +99,11 @@ class WindowFuncsSpec extends AnyFlatSpec with Matchers with LogSupport {
 
     println(s"list = ${list.mkString(", \n")}")
     println("")
-    println(s"${keys.dropRight(1).zip(keys.drop(1)).map { case (prev, next) => next - prev }.mkString(", \n")}")
+    println(s"${
+      keys.dropRight(1).zip(keys.drop(1)).map {
+        case (prev, next) => next - prev
+      }.mkString(", \n")
+    }")
 
     list.foreach {
       case (_, l) => {
@@ -129,7 +114,7 @@ class WindowFuncsSpec extends AnyFlatSpec with Matchers with LogSupport {
       }
     }
 
-    /*    val list = buf.toList.sortBy {
+/*    val list = buf.toList.sortBy {
       case (k, _) => k
     }.map {
       case (_, chunk) => chunk.map(_.record.timestamp.createTime.get)

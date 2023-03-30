@@ -2,6 +2,7 @@ package com.sergeiionin.timewindows
 
 import cats.effect.kernel.Spawn
 import cats.effect.{Async, Ref, Resource}
+import cats.implicits.catsSyntaxApplicativeId
 import cats.syntax.flatMap._
 import fs2.Chunk
 import fs2.kafka.CommittableConsumerRecord
@@ -19,46 +20,59 @@ import wvlet.log.Logger
 // 6) also there's a chance that the release action won't be triggered for a very long time
 
 // todo add test with plain stream
-class KafkaStreamTimeWindowAggregatorServiceImpl[F[_] : Async : Spawn, K, V](chunksRef: Ref[F, Map[Long, Chunk[CommittableConsumerRecord[F, K, V]]]],
-                                                                             startRef: Ref[F, Long],
-                                                                             durationMillis: Long,
-                                                                             releaseChunk: Chunk[CommittableConsumerRecord[F, K, V]] => F[Unit])
-                                                                            (implicit logger: Logger) extends StreamTimeWindowAggregatorService[F, CommittableConsumerRecord[F, K, V]]{
+class KafkaStreamTimeWindowAggregatorServiceImpl[F[_]: Async: Spawn, K, V](
+  chunksRef:      Ref[F, Map[Long, Chunk[CommittableConsumerRecord[F, K, V]]]],
+  startRef:       Ref[F, Long],
+  durationMillis: Long,
+  releaseChunk:   Chunk[CommittableConsumerRecord[F, K, V]] => F[Unit],
+)(implicit
+  logger:         Logger
+) extends StreamTimeWindowAggregatorService[F, CommittableConsumerRecord[F, K, V]](timeWindowMillis = durationMillis) {
   override val chunkState: Ref[F, Map[Long, Chunk[CommittableConsumerRecord[F, K, V]]]] = chunksRef
 
   override def addToChunk(rec: CommittableConsumerRecord[F, K, V]): F[Unit] =
     startRef.update(time => {
-      if (time == 0) rec.record.timestamp.createTime.getOrElse(System.currentTimeMillis()) else time
+      if (time == 0)
+        rec.record.timestamp.createTime.getOrElse(System.currentTimeMillis())
+      else
+        time
     }) >> super.addToChunk(rec)
 
-  override def getStateKey(rec: CommittableConsumerRecord[F, K, V]): F[Long] =
-    startRef.modify { start => {
-        val recTimestamp = rec.record.timestamp.createTime.getOrElse(System.currentTimeMillis())
-        val diff = recTimestamp - start
-        val key = start + (diff / durationMillis) * durationMillis
-        start -> key
-      }
+  override def getStateKey(rec: CommittableConsumerRecord[F, K, V]): F[Long] = startRef.modify { start =>
+    {
+      val recTimestamp = rec.record.timestamp.createTime.getOrElse(System.currentTimeMillis())
+      val diff         = recTimestamp - start
+      val key          = start + (diff / durationMillis) * durationMillis
+      start -> key
     }
+  }
 
+  override def onChunkRelease(chunk: Chunk[CommittableConsumerRecord[F, K, V]]): F[Unit] = releaseChunk(chunk)
 }
 
 object KafkaStreamTimeWindowAggregatorServiceImpl {
 
-  def make[F[_] : Async, K, V](durationMillis: Long, onRelease: Chunk[CommittableConsumerRecord[F, K, V]] => F[Unit])
-                        (implicit logger: Logger): Resource[F, KafkaStreamTimeWindowAggregatorServiceImpl[F, K, V]] = {
+  def make[F[_]: Async, K, V](
+    durationMillis: Long,
+    onRelease:      Chunk[CommittableConsumerRecord[F, K, V]] => F[Unit],
+  )(implicit
+    logger:         Logger
+  ): Resource[F, KafkaStreamTimeWindowAggregatorServiceImpl[F, K, V]] = {
 
-    def mainResource(chunksRef: Ref[F, Map[Long, Chunk[CommittableConsumerRecord[F, K, V]]]],
-                     startRef: Ref[F, Long]): Resource[F, KafkaStreamTimeWindowAggregatorServiceImpl[F, K, V]] =
-        Resource.pure(new KafkaStreamTimeWindowAggregatorServiceImpl(chunksRef, startRef, durationMillis, onRelease))
+    def mainResource(
+      chunksRef: Ref[F, Map[Long, Chunk[CommittableConsumerRecord[F, K, V]]]],
+      startRef:  Ref[F, Long],
+    ): Resource[F, KafkaStreamTimeWindowAggregatorServiceImpl[F, K, V]] =
+      Resource.make(
+        new KafkaStreamTimeWindowAggregatorServiceImpl(chunksRef, startRef, durationMillis, onRelease).pure[F]
+      )(s => s.onRelease())
 
     for {
-      chunksRef   <- Resource.eval(Async[F].ref(Map.empty[Long, Chunk[CommittableConsumerRecord[F, K, V]]]))
-      startRef    <- Resource.eval(Async[F].ref(0L))
-      _           <- StreamTimeWindowAggregatorService.clearingStreamResource(durationMillis, chunksRef, onRelease)
-      main        <- mainResource(chunksRef, startRef)
+      chunksRef <- Resource.eval(Async[F].ref(Map.empty[Long, Chunk[CommittableConsumerRecord[F, K, V]]]))
+      startRef  <- Resource.eval(Async[F].ref(0L))
+      main      <- mainResource(chunksRef, startRef)
     } yield main
 
   }
 
 }
-

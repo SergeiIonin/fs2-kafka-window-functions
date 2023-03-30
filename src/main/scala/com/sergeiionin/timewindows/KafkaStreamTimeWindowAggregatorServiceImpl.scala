@@ -8,7 +8,8 @@ import fs2.kafka.CommittableConsumerRecord
 import wvlet.log.Logger
 
 // fixme we need to also address the following issues
-// 1) the record(s) are coming much later than the current start
+// 1) the record(s) are coming much later than the current start => We don't need to operate with current time,
+// instead we need to regularly clean chunks of msgs
 // 2) we should better read from each partition to guarantee the order of records and when we may merge the chunks:
 // start_time = min(start_time) among all partitions
 // end_time = start_time + window_size
@@ -16,7 +17,8 @@ import wvlet.log.Logger
 // 4) how exactly to merge records from different partitions?
 // 5) if the records aren't coming very long, we should set startRef to 0 so that next record will set it again, then
 // how and when to set startRef to 0?
-// 6) also there's a chance that the release action won't be triggered for a very long time
+// 6) also there's a chance that the release action won't be triggered for a very long time => should regularly clean chunks of msgs
+// via background task (stream)
 
 // todo add test with plain stream
 class KafkaStreamTimeWindowAggregatorServiceImpl[F[_]: Async: Spawn, K, V](

@@ -2,7 +2,6 @@ package com.sergeiionin.timewindows
 
 import cats.effect.kernel.Spawn
 import cats.effect.{Async, Ref, Resource}
-import cats.implicits.catsSyntaxApplicativeId
 import cats.syntax.flatMap._
 import fs2.Chunk
 import fs2.kafka.CommittableConsumerRecord
@@ -27,7 +26,7 @@ class KafkaStreamTimeWindowAggregatorServiceImpl[F[_]: Async: Spawn, K, V](
   releaseChunk:   Chunk[CommittableConsumerRecord[F, K, V]] => F[Unit],
 )(implicit
   logger:         Logger
-) extends StreamTimeWindowAggregatorService[F, CommittableConsumerRecord[F, K, V]](timeWindowMillis = durationMillis) {
+) extends StreamTimeWindowAggregatorService[F, CommittableConsumerRecord[F, K, V]] {
   override val chunkState: Ref[F, Map[Long, Chunk[CommittableConsumerRecord[F, K, V]]]] = chunksRef
 
   override def addToChunk(rec: CommittableConsumerRecord[F, K, V]): F[Unit] =
@@ -47,7 +46,6 @@ class KafkaStreamTimeWindowAggregatorServiceImpl[F[_]: Async: Spawn, K, V](
     }
   }
 
-  override def onChunkRelease(chunk: Chunk[CommittableConsumerRecord[F, K, V]]): F[Unit] = releaseChunk(chunk)
 }
 
 object KafkaStreamTimeWindowAggregatorServiceImpl {
@@ -62,14 +60,14 @@ object KafkaStreamTimeWindowAggregatorServiceImpl {
     def mainResource(
       chunksRef: Ref[F, Map[Long, Chunk[CommittableConsumerRecord[F, K, V]]]],
       startRef:  Ref[F, Long],
-    ): Resource[F, KafkaStreamTimeWindowAggregatorServiceImpl[F, K, V]] =
-      Resource.make(
-        new KafkaStreamTimeWindowAggregatorServiceImpl(chunksRef, startRef, durationMillis, onRelease).pure[F]
-      )(s => s.onRelease())
+    ): Resource[F, KafkaStreamTimeWindowAggregatorServiceImpl[F, K, V]] = Resource.pure(
+      new KafkaStreamTimeWindowAggregatorServiceImpl(chunksRef, startRef, durationMillis, onRelease)
+    )
 
     for {
       chunksRef <- Resource.eval(Async[F].ref(Map.empty[Long, Chunk[CommittableConsumerRecord[F, K, V]]]))
       startRef  <- Resource.eval(Async[F].ref(0L))
+      _         <- StreamTimeWindowAggregatorService.clearingStreamResource(durationMillis, chunksRef, onRelease)
       main      <- mainResource(chunksRef, startRef)
     } yield main
 

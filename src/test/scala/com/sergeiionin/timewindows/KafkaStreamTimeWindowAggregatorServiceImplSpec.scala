@@ -17,7 +17,6 @@ import wvlet.log.{LogSupport, Logger}
 import scala.collection.mutable
 import scala.concurrent.duration.{DurationInt, FiniteDuration}
 
-// fixme the consumer is constantly exiting ahead of time
 class KafkaStreamTimeWindowAggregatorServiceImplSpec extends AnyFlatSpec with Matchers with LogSupport {
 
   implicit val l: Logger = logger
@@ -62,10 +61,6 @@ class KafkaStreamTimeWindowAggregatorServiceImplSpec extends AnyFlatSpec with Ma
         ()
     }
 
-    /*,
-              "key.deserializer" -> "org.apache.kafka.common.serialization.StringDeserializer",
-              "value.deserializer" -> "org.apache.kafka.common.serialization.StringDeserializer"*/
-
     (for {
       kafkaContainer    <- kafkaResource
       props              = Map("bootstrap.servers" -> kafkaContainer.bootstrapServers)
@@ -89,21 +84,19 @@ class KafkaStreamTimeWindowAggregatorServiceImplSpec extends AnyFlatSpec with Ma
                            )
     } yield (producerService, consumerService, aggregatorService))
       .use { case (producer, consumer, aggregatorService) =>
-        produceEveryNmillis(numOfMsgs, stepMillis = 20.millis, producer = producer, topic = topic)
-          .racePair(
-            consumer.subscribe(NonEmptyList.one(topic)) >>
-              consumer
-                .getStream()
-                .evalTap(rec => {
-                  log(s"record consumed at ${System.currentTimeMillis()} = ${rec.record.key}") >>
-                  aggregatorService.addToChunk(rec)
-                })
-                .map(r => r.offset)
-                .through(commitBatchWithin(200, 5.second))
-                // .interruptAfter(5.second)
-                .compile
-                .drain
-          )
+        produceEveryNmillis(numOfMsgs, stepMillis = 20.millis, producer = producer, topic = topic) >>
+        (consumer.subscribe(NonEmptyList.one(topic)) >>
+          consumer
+            .getStream()
+            .evalTap(rec => {
+              log(s"record consumed at ${System.currentTimeMillis()} = ${rec.record.key}") >>
+              aggregatorService.addToChunk(rec)
+            })
+            .map(r => r.offset)
+            .through(commitBatchWithin(200, 5.second))
+            .interruptAfter(5.second)
+            .compile
+            .drain)
       }
       .unsafeRunSync()
 

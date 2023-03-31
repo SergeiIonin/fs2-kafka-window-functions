@@ -2,7 +2,6 @@ package com.sergeiionin.timewindows
 
 import cats.effect.unsafe.implicits.global
 import cats.effect.{Async, IO, Ref, Resource}
-import cats.implicits.{catsSyntaxApplicativeId, catsSyntaxFlatMapOps}
 import com.sergeiionin.Domain.TestRecord
 import com.sergeiionin.timewindows.StreamsTimeWindowsAggregatorServiceSpec.StreamTimeWindowAggregatorServiceImpl
 import fs2.Chunk
@@ -25,8 +24,6 @@ class StreamsTimeWindowsAggregatorServiceSpec extends AnyFlatSpec with Matchers 
     val buf = mutable.Map[Long, Chunk[TestRecord]]()
 
     val timeWindowSizeMillis = 200L
-
-    // val numOfMsgs = 100
 
     def onRel(chunk: Chunk[TestRecord]): IO[Unit] = IO {
       if (chunk.nonEmpty) {
@@ -151,16 +148,8 @@ object StreamsTimeWindowsAggregatorServiceSpec {
     releaseChunk:   Chunk[TestRecord] => F[Unit],
   )(implicit
     logger:         Logger
-  ) extends StreamTimeWindowAggregatorService[F, TestRecord](timeWindowMillis = durationMillis) {
+  ) extends StreamTimeWindowAggregatorService[F, TestRecord] {
     override val chunkState = chunkStateRef
-
-    override def addToChunk(rec: TestRecord): F[Unit] =
-      startRef.update(time => {
-        if (time == 0)
-          rec.createTime
-        else
-          time
-      }) >> super.addToChunk(rec)
 
     override def getStateKey(rec: TestRecord): F[Long] = startRef.modify { start =>
       {
@@ -170,8 +159,6 @@ object StreamsTimeWindowsAggregatorServiceSpec {
         start -> key
       }
     }
-
-    override def onChunkRelease(chunk: Chunk[TestRecord]): F[Unit] = releaseChunk(chunk)
   }
 
   object StreamTimeWindowAggregatorServiceImpl {
@@ -185,14 +172,14 @@ object StreamsTimeWindowsAggregatorServiceSpec {
       def mainResource(
         chunkStateRef: Ref[F, Map[Long, Chunk[TestRecord]]],
         startRef:      Ref[F, Long],
-      ): Resource[F, StreamTimeWindowAggregatorServiceImpl[F]] =
-        Resource.make(
-          new StreamTimeWindowAggregatorServiceImpl(chunkStateRef, startRef, durationMillis, onRelease).pure[F]
-        )(s => s.onRelease())
+      ): Resource[F, StreamTimeWindowAggregatorServiceImpl[F]] = Resource.pure(
+        new StreamTimeWindowAggregatorServiceImpl(chunkStateRef, startRef, durationMillis, onRelease)
+      )
 
       for {
         chunksRef <- Resource.eval(Async[F].ref(Map.empty[Long, Chunk[TestRecord]]))
         startRef  <- Resource.eval(Async[F].ref(0L))
+        _         <- StreamTimeWindowAggregatorService.clearingStreamResource(durationMillis, chunksRef, onRelease)
         main      <- mainResource(chunksRef, startRef)
       } yield main
 

@@ -11,15 +11,29 @@ import wvlet.log.Logger
 
 import scala.concurrent.duration.{FiniteDuration, MILLISECONDS}
 
-abstract class WindowRecordsAggregatorService[F[_]: Async, R](chunksRef: Ref[F, ChunksMap[R]]
-                                                             )(implicit logger: Logger) {
+// developer should only provide the way how to attribute record to the chunk (obtain a key of the
+// Map[KR, Chunk[R]], where KR is the key type and the release condition
 
-  //val chunkState: Ref[F, Map[Long, Chunk[R]]]
-  //def getStateKey(rec: R): F[Long]
-
-  def getStateKey(rec: R): F[Long]
-  def splitChunks(chunksMap: ChunksMap[R]): (ChunksMap[R], ChunksMap[R])
+abstract class WindowRecordsAggregatorService[F[_]: Async, KR, R](
+  chunksRef: Ref[F, ChunksMap[KR, R]]
+)(implicit
+  logger:    Logger
+) {
+  def getStateKey(rec: R): F[KR]
   def onChunkRelease(chunk: Chunk[R]): F[Unit]
+
+  // we may need access to all chunks to determine which we should release (see TimeWindowKafkaRecordsAggregatorServiceImpl)
+  def releaseChunkCondition(chunksMap: ChunksMap[KR, R]): KR => Boolean
+
+  private def splitChunks(chunksMap: ChunksMap[KR, R]): (ChunksMap[KR, R], ChunksMap[KR, R]) =
+    if (chunksMap.nonEmpty) {
+      val condition          = releaseChunkCondition(chunksMap)
+      val mapChunksReleasing = chunksMap.filter { case (kr, _) => condition(kr) }
+      val mapChunksLeft      = chunksMap.removedAll(mapChunksReleasing.keySet)
+
+      mapChunksLeft -> mapChunksReleasing
+    } else
+      Map.empty[KR, Chunk[R]] -> Map.empty[KR, Chunk[R]]
 
   def addToChunk(rec: R): F[Unit] =
     for {
@@ -28,8 +42,8 @@ abstract class WindowRecordsAggregatorService[F[_]: Async, R](chunksRef: Ref[F, 
       key   <- getStateKey(rec)
       _      = logger.info(s"record will be attributed to the key $key")
       _     <- chunksRef.update(chunksMap => {
-                  val currentChunk = chunksMap.getOrElse(key, Chunk.empty[R])
-                  chunksMap.updated(key, currentChunk ++ Chunk(rec))
+                 val currentChunk = chunksMap.getOrElse(key, Chunk.empty[R])
+                 chunksMap.updated(key, currentChunk ++ Chunk(rec))
                })
       _     <- mutex.release
     } yield ()
@@ -38,45 +52,46 @@ abstract class WindowRecordsAggregatorService[F[_]: Async, R](chunksRef: Ref[F, 
     fs2.Stream
       .awakeEvery(FiniteDuration(durationMillis, MILLISECONDS))
       .evalMap(_ =>
-        chunksRef.modify { chunksMap => {
-          val (chunksLeft, chunksReleased) = splitChunks(chunksMap)
-          chunksLeft -> chunksReleased.values.toList.traverse(onChunkRelease)
-        }
+        chunksRef.modify { chunksMap =>
+          {
+            val (chunksLeft, chunksReleased) = splitChunks(chunksMap)
+            chunksLeft -> chunksReleased.values.toList.traverse(onChunkRelease)
+          }
         }.flatten
       )
       .compile
       .drain
   }
 
-  def finalizeChunks(): F[Unit] = chunksRef.modify { chunksMap => {
-    Map.empty[Long, Chunk[R]] -> {
-      val chunksLeft = chunksMap.values.toList
-      logger.info(s"exiting clearingStream, number of chunks left to release is ${chunksLeft.size}...")
-      chunksMap.values.toList.traverse(onChunkRelease).void
-    }
-  }
-  }.flatten
-
+  def finalizeChunks(): F[Unit] =
+    chunksRef.modify { chunksMap =>
+      {
+        Map.empty[KR, Chunk[R]] -> {
+          val chunksLeft = chunksMap.values.toList
+          logger.info(s"exiting clearingStream, number of chunks left to release is ${chunksLeft.size}...")
+          chunksMap.values.toList.traverse(onChunkRelease).void
+        }
+      }
+    }.flatten
 
 }
 
 object WindowRecordsAggregatorService {
 
-  type ChunksMap[R] = Map[Long, Chunk[R]]
+  type ChunksMap[KR, R] = Map[KR, Chunk[R]]
 
-  def make[F[_] : Async, R](durationMillis: Long,
-                            service: WindowRecordsAggregatorService[F, R]): Resource[F, WindowRecordsAggregatorService[F, R]] = {
+  def make[F[_]: Async, KR, R](
+    durationMillis: Long,
+    service:        WindowRecordsAggregatorService[F, KR, R],
+  ): Resource[F, WindowRecordsAggregatorService[F, KR, R]] = {
 
-  def backgroundResource() =
-      Resource
-        .make(service.clear(durationMillis).start)(fib =>
-          service.finalizeChunks() >> fib.cancel
-        ).map(_.join)
+    def backgroundResource() = Resource
+      .make(service.clear(durationMillis).start)(fib => service.finalizeChunks() >> fib.cancel)
+      .map(_.join)
 
-      for {
-        _         <- backgroundResource()
-        main      <- Resource.pure(service)
-      } yield main
+    for {
+      _    <- backgroundResource()
+      main <- Resource.pure(service)
+    } yield main
   }
 }
-

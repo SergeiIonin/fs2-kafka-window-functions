@@ -122,8 +122,6 @@ class TimeWindowKafkaRecordsAggregatorServiceImplSpec extends AnyFlatSpec with M
 
   }
 
-  "TimeWindowKafkaRecordsAggregatorServiceImpl" should "aggregate records in timeframes in case of the partitioned stream" in {
-
-  }
+  "TimeWindowKafkaRecordsAggregatorServiceImpl" should "aggregate records in timeframes in case of the partitioned stream" in {}
 
 }

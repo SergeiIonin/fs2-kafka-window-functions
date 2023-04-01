@@ -1,6 +1,5 @@
 WIP
 
-
 Planned features
 
 1) Developer may select whether the timestamp of the Kafka record or the actual time of 

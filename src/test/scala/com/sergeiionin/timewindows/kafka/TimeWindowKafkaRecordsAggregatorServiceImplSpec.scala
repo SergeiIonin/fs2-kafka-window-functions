@@ -1,10 +1,13 @@
-package com.sergeiionin.timewindows
+package com.sergeiionin.timewindows.kafka
 
 import cats.data.NonEmptyList
 import cats.effect.IO
+import cats.effect.kernel.Resource
 import cats.effect.unsafe.implicits.global
+import com.dimafeng.testcontainers.KafkaContainer
 import com.sergeiionin.consumer.KafkaConsumerService
 import com.sergeiionin.producer.{ProducerService, ProducerServicePlainImpl}
+import com.sergeiionin.timewindows.TimeWindowKafkaRecordsAggregatorServiceImpl
 import fs2.Chunk
 import fs2.kafka.{CommittableConsumerRecord, commitBatchWithin}
 import org.scalatest.flatspec.AnyFlatSpec
@@ -15,7 +18,7 @@ import wvlet.log.{LogSupport, Logger}
 import scala.collection.mutable
 import scala.concurrent.duration.{DurationInt, FiniteDuration}
 
-class KafkaStreamTimeWindowAggregatorServiceImplKafkaLocalSpec extends AnyFlatSpec with Matchers with LogSupport {
+class TimeWindowKafkaRecordsAggregatorServiceImplSpec extends AnyFlatSpec with Matchers with LogSupport {
 
   implicit val l: Logger = logger
 
@@ -35,12 +38,21 @@ class KafkaStreamTimeWindowAggregatorServiceImplKafkaLocalSpec extends AnyFlatSp
 
   def log(msg: String): IO[Unit] = IO(logger.info(msg))
 
-  "Chunking Service" should "aggregate records within a timeframe and count the number of records within each frame" in {
+  "TimeWindowKafkaRecordsAggregatorServiceImpl" should "aggregate records in timeframes" in {
     val timeWindowSizeMillis = 200L
     val numOfMsgs            = 100
 
-    val topic = s"topic-${System.currentTimeMillis()}"
-    val buf   = mutable.Map[Long, Chunk[CommittableConsumerRecord[IO, String, String]]]()
+    val kafkaContainer = KafkaContainer()
+
+    val kafkaResource: Resource[IO, KafkaContainer] =
+      Resource.make(IO.delay {
+        kafkaContainer.start()
+        kafkaContainer
+      })(container => {
+        IO.delay(container.stop())
+      })
+    val topic                                       = "topic-0"
+    val buf                                         = mutable.Map[Long, Chunk[CommittableConsumerRecord[IO, String, String]]]()
 
     def onRelease(chunk: Chunk[CommittableConsumerRecord[IO, String, String]]): IO[Unit] = IO {
       if (chunk.nonEmpty) {
@@ -50,48 +62,44 @@ class KafkaStreamTimeWindowAggregatorServiceImplKafkaLocalSpec extends AnyFlatSp
         ()
     }
 
-    val groupId = s"test-group-${System.currentTimeMillis()}"
-
-    val props     = Map("bootstrap.servers" -> "PLAINTEXT://localhost:9092")
-    val propsProd =
-      props ++ Map(
-        "key.serializer"   -> "org.apache.kafka.common.serialization.StringSerializer",
-        "value.serializer" -> "org.apache.kafka.common.serialization.StringSerializer",
-      )
-    val propsCons =
-      props ++
-        Map(
-          "group.id"           -> groupId,
-          // "auto.offset.reset" -> "latest",
+    (for {
+      kafkaContainer    <- kafkaResource
+      props              = Map(
+                             "bootstrap.servers" -> kafkaContainer.bootstrapServers
+                           ) // for localhost     val props = Map("bootstrap.servers" -> "PLAINTEXT://localhost:9092")
+      propsProd          =
+        props ++ Map(
+          "key.serializer"   -> "org.apache.kafka.common.serialization.StringSerializer",
+          "value.serializer" -> "org.apache.kafka.common.serialization.StringSerializer",
+        )
+      propsCons          =
+        props ++ Map(
+          "group.id"           -> "test_group_1",
           "auto.offset.reset"  -> "earliest",
           "key.deserializer"   -> "org.apache.kafka.common.serialization.StringDeserializer",
           "value.deserializer" -> "org.apache.kafka.common.serialization.StringDeserializer",
         )
-
-    (for {
       producerService   <- ProducerServicePlainImpl.make[IO, String, String](propsProd)
       consumerService   <- KafkaConsumerService.make[IO, String, String](propsCons)
-      aggregatorService <- KafkaStreamTimeWindowAggregatorServiceImpl.make(
-                             durationMillis = timeWindowSizeMillis,
-                             onRelease = onRelease,
+      aggregatorService <- TimeWindowKafkaRecordsAggregatorServiceImpl.make(
+                             timeWindowMillis = timeWindowSizeMillis,
+                             releaseChunk = onRelease,
                            )
     } yield (producerService, consumerService, aggregatorService))
       .use { case (producer, consumer, aggregatorService) =>
-        produceEveryNmillis(numOfMsgs, stepMillis = 20.millis, producer = producer, topic = topic)
-          .racePair(
-            consumer.subscribe(NonEmptyList.one(topic)) >>
-              consumer
-                .getStream()
-                .evalTap(rec => {
-                  log(s"record consumed at ${System.currentTimeMillis()} = ${rec.record.key}") >>
-                  aggregatorService.addToChunk(rec)
-                })
-                .map(r => r.offset)
-                .through(commitBatchWithin(100, 1.second))
-                // .interruptAfter(5.second)
-                .compile
-                .drain
-          )
+        produceEveryNmillis(numOfMsgs, stepMillis = 20.millis, producer = producer, topic = topic) >>
+        (consumer.subscribe(NonEmptyList.one(topic)) >>
+          consumer
+            .getStream()
+            .evalTap(rec => {
+              log(s"record consumed at ${System.currentTimeMillis()} = ${rec.record.key}") >>
+              aggregatorService.addToChunk(rec)
+            })
+            .map(r => r.offset)
+            .through(commitBatchWithin(200, 5.second))
+            .interruptAfter(5.second)
+            .compile
+            .drain)
       }
       .unsafeRunSync()
 
@@ -116,5 +124,7 @@ class KafkaStreamTimeWindowAggregatorServiceImplKafkaLocalSpec extends AnyFlatSp
     list.foldLeft(0)((next, acc) => next + acc._2.size) shouldBe numOfMsgs
 
   }
+
+  "TimeWindowKafkaRecordsAggregatorServiceImpl" should "aggregate records in timeframes in case of the partitioned stream" in {}
 
 }

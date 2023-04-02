@@ -64,9 +64,7 @@ class TimeWindowKafkaRecordsAggregatorServiceImplSpec extends AnyFlatSpec with M
 
     (for {
       kafkaContainer    <- kafkaResource
-      props              = Map(
-                             "bootstrap.servers" -> kafkaContainer.bootstrapServers
-                           ) // for localhost     val props = Map("bootstrap.servers" -> "PLAINTEXT://localhost:9092")
+      props              = Map("bootstrap.servers" -> kafkaContainer.bootstrapServers) // for localhost     val props = Map("bootstrap.servers" -> "PLAINTEXT://localhost:9092")
       propsProd          =
         props ++ Map(
           "key.serializer"   -> "org.apache.kafka.common.serialization.StringSerializer",

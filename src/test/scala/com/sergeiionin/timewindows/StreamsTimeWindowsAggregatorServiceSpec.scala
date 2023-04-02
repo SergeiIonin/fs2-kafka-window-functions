@@ -144,12 +144,12 @@ object StreamsTimeWindowsAggregatorServiceSpec {
   final case class TimeAndOffset(time: Long, offset: Long)
 
   class StreamTimeWindowAggregatorServiceImpl[F[_]: Async](
-    chunkStateRef:    Ref[F, Map[Long, Chunk[TestRecord]]],
-    startRef:         Ref[F, Long],
+    chunkStateRef:  Ref[F, Map[Long, Chunk[TestRecord]]],
+    startRef:       Ref[F, Long],
     timeWindowMillis: Long,
-    releaseChunk:     Chunk[TestRecord] => F[Unit],
+    releaseChunk:   Chunk[TestRecord] => F[Unit],
   )(implicit
-    logger:           Logger
+    logger:         Logger
   ) extends WindowRecordsAggregatorService[F, Long, TestRecord](chunkStateRef) {
 
     override def getStateKey(rec: TestRecord): F[Long] = startRef.modify { start =>
@@ -165,7 +165,7 @@ object StreamsTimeWindowsAggregatorServiceSpec {
 
     override def releaseChunkCondition(chunksMap: ChunksMap[Long, TestRecord]): Long => Boolean = {
       val keysSortedAsc = chunksMap.keySet.toList.sorted
-      val keyMax        = keysSortedAsc.last
+      val keyMax = keysSortedAsc.last
       (key: Long) => key <= (keyMax - 2 * timeWindowMillis)
     }
   }
@@ -173,15 +173,15 @@ object StreamsTimeWindowsAggregatorServiceSpec {
   object StreamTimeWindowAggregatorServiceImpl {
     def make[F[_]: Async](
       timeWindowMillis: Long,
-      onRelease:        Chunk[TestRecord] => F[Unit],
+      onRelease:      Chunk[TestRecord] => F[Unit],
     )(implicit
-      logger:           Logger
+      logger:         Logger
     ): Resource[F, WindowRecordsAggregatorService[F, Long, TestRecord]] =
       for {
         chunkStateRef <- Resource.eval(Async[F].ref(Map.empty[Long, Chunk[TestRecord]]))
-        startRef      <- Resource.eval(Async[F].ref(0L))
-        service        = new StreamTimeWindowAggregatorServiceImpl(chunkStateRef, startRef, timeWindowMillis, onRelease)
-        main          <- WindowRecordsAggregatorService.make(timeWindowMillis * 2, service)
+        startRef  <- Resource.eval(Async[F].ref(0L))
+        service   = new StreamTimeWindowAggregatorServiceImpl(chunkStateRef, startRef, timeWindowMillis, onRelease)
+        main      <- WindowRecordsAggregatorService.make(timeWindowMillis * 2, service)
       } yield main
 
   }

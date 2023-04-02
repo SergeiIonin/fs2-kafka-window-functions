@@ -48,7 +48,7 @@ abstract class WindowRecordsAggregatorService[F[_]: Async, KR, R](
       _     <- mutex.release
     } yield ()
 
-  def clear(durationMillis: Long): F[Unit] = {
+  def clear(durationMillis: Long): F[Unit] =
     fs2.Stream
       .awakeEvery(FiniteDuration(durationMillis, MILLISECONDS))
       .evalMap(_ =>
@@ -61,7 +61,6 @@ abstract class WindowRecordsAggregatorService[F[_]: Async, KR, R](
       )
       .compile
       .drain
-  }
 
   def finalizeChunks(): F[Unit] =
     chunksRef.modify { chunksMap =>

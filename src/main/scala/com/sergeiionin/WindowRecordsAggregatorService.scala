@@ -12,7 +12,9 @@ import wvlet.log.Logger
 import scala.concurrent.duration.{FiniteDuration, MILLISECONDS}
 
 // developer should only provide the way how to attribute record to the chunk (obtain a key of the
-// Map[KR, Chunk[R]], where KR is the key type and the release condition
+// Map[KR, Chunk[R]], where KR is the key type,
+// the release condition of chunks from Map[KR, Chunk[R]
+// and the release function Chunk[R] => F[Unit]
 
 abstract class WindowRecordsAggregatorService[F[_]: Async, KR, R](
   chunksRef: Ref[F, ChunksMap[KR, R]]
@@ -35,6 +37,7 @@ abstract class WindowRecordsAggregatorService[F[_]: Async, KR, R](
     } else
       Map.empty[KR, Chunk[R]] -> Map.empty[KR, Chunk[R]]
 
+  // getStateKey should give the same result if chunksRef.update failed
   def addToChunk(rec: R): F[Unit] =
     for {
       mutex <- Semaphore.apply(1)

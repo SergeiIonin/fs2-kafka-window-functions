@@ -30,7 +30,7 @@ object Settings {
     "-Xlint:private-shadow", // A private field (or class parameter) shadows a superclass field.
     "-Xlint:stars-align", // Pattern sequence wildcard must align with sequence component.
     "-Xlint:type-parameter-shadow", // A local type parameter shadows a type already in scope.
-    "-Xlint:unused", // TODO check if we still need -Wunused below
+    "-Xlint:unused",
     "-Xlint:nonlocal-return", // A return statement used an exception for flow control.
     "-Xlint:implicit-not-found", // Check @implicitNotFound and @implicitAmbiguous messages.
     "-Xlint:serial", // @SerialVersionUID on traits and non-serializable classes.

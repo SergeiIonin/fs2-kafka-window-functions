@@ -64,7 +64,9 @@ class TimeWindowKafkaRecordsAggregatorServiceImplSpec extends AnyFlatSpec with M
 
     (for {
       kafkaContainer    <- kafkaResource
-      props              = Map("bootstrap.servers" -> kafkaContainer.bootstrapServers) // for localhost     val props = Map("bootstrap.servers" -> "PLAINTEXT://localhost:9092")
+      props              = Map(
+                             "bootstrap.servers" -> kafkaContainer.bootstrapServers
+                           ) // for localhost     val props = Map("bootstrap.servers" -> "PLAINTEXT://localhost:9092")
       propsProd          =
         props ++ Map(
           "key.serializer"   -> "org.apache.kafka.common.serialization.StringSerializer",
@@ -108,14 +110,9 @@ class TimeWindowKafkaRecordsAggregatorServiceImplSpec extends AnyFlatSpec with M
     val keys = list.map(_._1)
     keys.sorted shouldBe keys
 
-    println(s"list = ${list.mkString(", \n")}")
-    println("")
-    println(s"${keys.dropRight(1).zip(keys.drop(1)).map { case (prev, next) => next - prev }.mkString(", \n")}")
-
     list.foreach { case (_, l) =>
       l.sorted shouldBe l
       val diff = l.last - l.head
-      println(s"diff between last and first records timestamps = $diff")
       diff <= timeWindowSizeMillis shouldBe true
     }
 

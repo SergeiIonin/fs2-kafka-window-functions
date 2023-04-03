@@ -44,21 +44,6 @@ object Dependencies {
     val deps = http4sDeps
   }
 
-  private object OpenSearch {
-    /*
-    private val restClientVersion = "2.5.0"
-    private val openSearchJavaVersion = "2.0.0"
-
-    def openSearch(artifact: String, version: String) =
-      "org.opensearch.client" % s"opensearch-$artifact" % version
-
-    val deps = List(openSearch("rest-client", restClientVersion),
-                    openSearch("java", openSearchJavaVersion))*/
-    val openSearch = "org.opensearch.client" % "opensearch-rest-high-level-client" % "1.3.2"
-
-    val deps = List(openSearch)
-  }
-
   private object Json {
     private val circeVersion = "0.14.4"
     def circe(artifact: String) = "io.circe" %% s"circe-$artifact" % circeVersion
@@ -72,12 +57,6 @@ object Dependencies {
     private val wvletVersion = "23.2.2"
     private val slf4jjdk14Version = "2.0.6"
 
-    /*private val pureConfigVersion = "0.17.1"
-
-    val pureConfig = "com.github.pureconfig" %% "pureconfig" % pureConfigVersion
-
-    val deps = Seq(pureConfig)*/
-
     val typesafeConfig = "com.typesafe" % "config" % "1.4.2"
 
     //Logs
@@ -88,6 +67,7 @@ object Dependencies {
   }
 
   private object Testing {
+    // todo add vals for deps
       val scalaTest = "org.scalatest" %% "scalatest" % "3.2.10"
       val scalaTestPlusCheck = "org.scalatestplus" %% "scalacheck-1-15" % "3.2.10.0"
       val scalacheck = "org.scalacheck" %% "scalacheck" % "1.15.4"
@@ -100,7 +80,7 @@ object Dependencies {
         Seq(scalaTest, scalacheck, scalaTestPlusCheck, scalacheckCats, scalacheckEffect, scalaTestCatEffect, scalaMock)
     }
 
-  val allDependencies     = Kafka.deps ++ Cats.deps ++ Http.deps ++ Json.deps ++ OpenSearch.deps ++ Misc.deps
+  val allDependencies     = Kafka.deps ++ Cats.deps ++ Http.deps ++ Json.deps ++ Misc.deps
   val allTestDependencies = Testing.deps.map(_ % Test)
 
 }

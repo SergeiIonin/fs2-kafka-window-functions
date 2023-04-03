@@ -1,11 +1,12 @@
-package com.sergeiionin.timewindows
+package com.sergeiionin.chunksize
 
 import cats.effect.unsafe.implicits.global
 import cats.effect.{Async, IO, Ref, Resource}
+import cats.syntax.functor._
 import com.sergeiionin.Domain.TestRecord
 import com.sergeiionin.WindowRecordsAggregatorService
 import com.sergeiionin.WindowRecordsAggregatorService.ChunksMap
-import com.sergeiionin.timewindows.StreamsTimeWindowsAggregatorServiceSpec.StreamTimeWindowAggregatorServiceImpl
+import com.sergeiionin.chunksize.StreamsChunkSizeAggregatorServiceSpec.StreamsChunkSizeAggregatorServiceImpl
 import fs2.Chunk
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.must.Matchers
@@ -15,7 +16,7 @@ import wvlet.log.{LogSupport, Logger}
 import scala.collection.mutable
 import scala.concurrent.duration.DurationInt
 
-class StreamsTimeWindowsAggregatorServiceSpec extends AnyFlatSpec with Matchers with LogSupport {
+class StreamsChunkSizeAggregatorServiceSpec extends AnyFlatSpec with Matchers with LogSupport {
 
   def log(msg: String): IO[Unit] = IO(logger.info(msg))
 
@@ -25,9 +26,8 @@ class StreamsTimeWindowsAggregatorServiceSpec extends AnyFlatSpec with Matchers 
 
     val buf = mutable.Map[Long, Chunk[TestRecord]]()
 
-    val timeWindowSizeMillis = 200L
-
-    val numOfMsgs = 100L
+    val totalMsgsSize = 100L
+    val chunkSize     = 10
 
     def onRel(chunk: Chunk[TestRecord]): IO[Unit] = IO {
       if (chunk.nonEmpty) {
@@ -43,16 +43,16 @@ class StreamsTimeWindowsAggregatorServiceSpec extends AnyFlatSpec with Matchers 
         counter.updateAndGet(_ + 1).flatMap(ctr => log(s"counter = $ctr")) >>
         IO(TestRecord("key", "value", System.currentTimeMillis()))
       })
-      .take(numOfMsgs)
+      .take(totalMsgsSize)
 
     IO.ref(0)
-      .flatMap { counter =>
-        StreamTimeWindowAggregatorServiceImpl
-          .make[IO](timeWindowMillis = timeWindowSizeMillis, onRelease = onRel)
+      .flatMap { ref =>
+        StreamsChunkSizeAggregatorServiceImpl
+          .make[IO](chunkSize, 500L, onRelease = onRel)
           .use(aggregator => {
             val referenceTime = System.currentTimeMillis()
             log(s"reference time = $referenceTime") >>
-            emit(counter).evalTap(rec => aggregator.addToChunk(rec)).compile.drain
+            emit(ref).evalTap(rec => aggregator.addToChunk(rec)).compile.drain
           })
       }
       .unsafeRunSync()
@@ -61,26 +61,18 @@ class StreamsTimeWindowsAggregatorServiceSpec extends AnyFlatSpec with Matchers 
       t -> chunk.map(_.createTime).toList
     }
 
-    val keys = list.map(_._1)
-    keys.sorted shouldBe keys
+    list.foreach { case (_, l) => l.size shouldBe chunkSize }
 
-    list.foreach { case (_, l) =>
-      l.sorted shouldBe l
-      val diff = l.last - l.head
-      diff <= timeWindowSizeMillis shouldBe true
-    }
-
-    list.foldLeft(0)((next, acc) => next + acc._2.size) shouldBe numOfMsgs
+    list.foldLeft(0)((next, acc) => next + acc._2.size) shouldBe 100
 
   }
 
   "StreamTimeWindowAggregatorService" should "add coming records into time chunks for records which have a time lag" in {
-    //
     implicit val l: Logger = logger
 
     val buf = mutable.Map[Long, Chunk[TestRecord]]()
 
-    val timeWindowSizeMillis = 200L
+    val chunkSize = 10
 
     val numOfMsgs = 100
 
@@ -104,8 +96,8 @@ class StreamsTimeWindowsAggregatorServiceSpec extends AnyFlatSpec with Matchers 
 
     def emit(): fs2.Stream[IO, TestRecord] = fs2.Stream.chunk(recordsChunk(numOfMsgs, stepMillis))
 
-    StreamTimeWindowAggregatorServiceImpl
-      .make[IO](timeWindowMillis = timeWindowSizeMillis, onRelease = onRel)
+    StreamsChunkSizeAggregatorServiceImpl
+      .make[IO](chunkSize = chunkSize, 500L, onRelease = onRel)
       .use(aggregator => {
         val referenceTime = System.currentTimeMillis()
         log(s"reference time = $referenceTime") >>
@@ -117,64 +109,62 @@ class StreamsTimeWindowsAggregatorServiceSpec extends AnyFlatSpec with Matchers 
       t -> chunk.map(_.createTime).toList
     }
 
-    val keys = list.map(_._1)
-    keys.sorted shouldBe keys
-
-    list.foreach { case (_, l) =>
-      l.sorted shouldBe l
-      val diff = l.last - l.head
-      diff <= timeWindowSizeMillis shouldBe true
-    }
-
-    list.foldLeft(0)((next, acc) => next + acc._2.size) shouldBe numOfMsgs
+    list.foreach { case (_, l) => l.size shouldBe chunkSize }
 
   }
 
 }
 
-object StreamsTimeWindowsAggregatorServiceSpec {
+object StreamsChunkSizeAggregatorServiceSpec {
 
-  final case class TimeAndOffset(time: Long, offset: Long)
-
-  class StreamTimeWindowAggregatorServiceImpl[F[_]: Async](
-    chunkStateRef:    Ref[F, Map[Long, Chunk[TestRecord]]],
-    startRef:         Ref[F, Long],
-    timeWindowMillis: Long,
-    releaseChunk:     Chunk[TestRecord] => F[Unit],
+  class StreamsChunkSizeAggregatorServiceImpl[F[_]: Async](
+    chunkSize:    Int,
+    chunksMapRef: Ref[F, Map[Long, Chunk[TestRecord]]],
+    releaseChunk: Chunk[TestRecord] => F[Unit],
   )(implicit
-    logger:           Logger
-  ) extends WindowRecordsAggregatorService[F, Long, TestRecord](chunkStateRef) {
+    logger:       Logger
+  ) extends WindowRecordsAggregatorService[F, Long, TestRecord](chunksMapRef) {
 
-    override def getStateKey(rec: TestRecord): F[Long] = startRef.modify { start =>
-      {
-        val recTimestamp = rec.createTime
-        val diff         = recTimestamp - start
-        val key          = start + (diff / timeWindowMillis) * timeWindowMillis
-        start -> key
+    override def getStateKey(rec: TestRecord): F[Long] = {
+      // safe
+      def getOrIncrementCurrentKey(currentKey: Long, mapping: ChunksMap[Long, TestRecord]): Long = {
+        val size = mapping(currentKey).size
+        if (size < chunkSize)
+          currentKey
+        else
+          currentKey + 1
       }
+
+      for {
+        chunksMap <- chunksMapRef.get
+        key        =
+          chunksMap.keySet.toList.sorted match {
+            case Nil  => 0L
+            case list => getOrIncrementCurrentKey(list.last, chunksMap)
+          }
+      } yield key
     }
 
     override def onChunkRelease(chunk: Chunk[TestRecord]): F[Unit] = releaseChunk(chunk)
 
     override def releaseChunkCondition(chunksMap: ChunksMap[Long, TestRecord]): Long => Boolean = {
-      val keysSortedAsc = chunksMap.keySet.toList.sorted
-      val keyMax        = keysSortedAsc.last
-      (key: Long) => key <= (keyMax - 2 * timeWindowMillis)
+      val latestKey = chunksMap.keySet.toList.sorted.max
+      (key: Long) => (key != latestKey) || chunksMap.get(key).map(_.size).fold(false)(_ == chunkSize)
     }
   }
 
-  object StreamTimeWindowAggregatorServiceImpl {
+  object StreamsChunkSizeAggregatorServiceImpl {
     def make[F[_]: Async](
+      chunkSize:        Int,
       timeWindowMillis: Long,
       onRelease:        Chunk[TestRecord] => F[Unit],
     )(implicit
       logger:           Logger
     ): Resource[F, WindowRecordsAggregatorService[F, Long, TestRecord]] =
       for {
-        chunkStateRef <- Resource.eval(Async[F].ref(Map.empty[Long, Chunk[TestRecord]]))
-        startRef      <- Resource.eval(Async[F].ref(0L))
-        service        = new StreamTimeWindowAggregatorServiceImpl(chunkStateRef, startRef, timeWindowMillis, onRelease)
-        main          <- WindowRecordsAggregatorService.make(timeWindowMillis * 2, service)
+        chunksMapRef <- Resource.eval(Async[F].ref(Map(0L -> Chunk.empty[TestRecord])))
+        service       = new StreamsChunkSizeAggregatorServiceImpl(chunkSize, chunksMapRef, onRelease)
+        main         <- WindowRecordsAggregatorService.make(timeWindowMillis * 2, service)
       } yield main
   }
 

@@ -1,4 +1,4 @@
-package com.sergeiionin.producer
+package io.github.sergeiionin.producer
 
 import cats.effect.kernel.Concurrent
 import cats.effect.{Async, Resource}

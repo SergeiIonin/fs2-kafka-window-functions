@@ -1,12 +1,12 @@
-package com.sergeiionin.chunksize
+package io.github.sergeiionin.chunksize
 
 import cats.effect.unsafe.implicits.global
 import cats.effect.{Async, IO, Ref, Resource}
 import cats.syntax.functor._
-import com.sergeiionin.Domain.TestRecord
-import com.sergeiionin.WindowRecordsAggregatorService
-import com.sergeiionin.WindowRecordsAggregatorService.ChunksMap
-import com.sergeiionin.chunksize.StreamsChunkSizeAggregatorServiceSpec.StreamsChunkSizeAggregatorServiceImpl
+import io.github.sergeiionin.Domain.TestRecord
+import io.github.sergeiionin.WindowRecordsAggregatorService
+import io.github.sergeiionin.WindowRecordsAggregatorService.ChunksMap
+import io.github.sergeiionin.chunksize.StreamsChunkSizeAggregatorServiceSpec.StreamsChunkSizeAggregatorServiceImpl
 import fs2.Chunk
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.must.Matchers

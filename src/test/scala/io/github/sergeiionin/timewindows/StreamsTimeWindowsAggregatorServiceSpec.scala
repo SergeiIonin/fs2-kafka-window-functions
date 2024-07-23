@@ -1,11 +1,11 @@
-package com.sergeiionin.timewindows
+package io.github.sergeiionin.timewindows
 
 import cats.effect.unsafe.implicits.global
 import cats.effect.{Async, IO, Ref, Resource}
-import com.sergeiionin.Domain.TestRecord
-import com.sergeiionin.WindowRecordsAggregatorService
-import com.sergeiionin.WindowRecordsAggregatorService.ChunksMap
-import com.sergeiionin.timewindows.StreamsTimeWindowsAggregatorServiceSpec.StreamTimeWindowAggregatorServiceImpl
+import io.github.sergeiionin.Domain.TestRecord
+import io.github.sergeiionin.WindowRecordsAggregatorService
+import io.github.sergeiionin.WindowRecordsAggregatorService.ChunksMap
+import io.github.sergeiionin.timewindows.StreamsTimeWindowsAggregatorServiceSpec.StreamTimeWindowAggregatorServiceImpl
 import fs2.Chunk
 import org.scalatest.flatspec.AnyFlatSpec
 import org.scalatest.matchers.must.Matchers

@@ -1,4 +1,4 @@
-package com.sergeiionin.producer
+package io.github.sergeiionin.producer
 
 import cats.effect.Async
 import cats.effect.kernel.Concurrent

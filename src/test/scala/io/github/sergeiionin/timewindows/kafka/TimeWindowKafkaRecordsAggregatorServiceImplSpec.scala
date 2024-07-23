@@ -1,13 +1,13 @@
-package com.sergeiionin.timewindows.kafka
+package io.github.sergeiionin.timewindows.kafka
 
 import cats.data.NonEmptyList
 import cats.effect.IO
 import cats.effect.kernel.Resource
 import cats.effect.unsafe.implicits.global
 import com.dimafeng.testcontainers.KafkaContainer
-import com.sergeiionin.consumer.KafkaConsumerService
-import com.sergeiionin.producer.{ProducerService, ProducerServicePlainImpl}
-import com.sergeiionin.timewindows.TimeWindowKafkaRecordsAggregatorServiceImpl
+import io.github.sergeiionin.consumer.KafkaConsumerService
+import io.github.sergeiionin.producer.{ProducerService, ProducerServicePlainImpl}
+import io.github.sergeiionin.timewindows.TimeWindowKafkaRecordsAggregatorServiceImpl
 import fs2.Chunk
 import fs2.kafka.{CommittableConsumerRecord, commitBatchWithin}
 import org.scalatest.flatspec.AnyFlatSpec
@@ -120,6 +120,6 @@ class TimeWindowKafkaRecordsAggregatorServiceImplSpec extends AnyFlatSpec with M
 
   }
 
-  "TimeWindowKafkaRecordsAggregatorServiceImpl" should "aggregate records in timeframes in case of the partitioned stream" in {}
+ // "TimeWindowKafkaRecordsAggregatorServiceImpl" should "aggregate records in timeframes in case of the partitioned stream" in {}
 
 }

@@ -1,10 +1,10 @@
-package com.sergeiionin.timewindows
+package io.github.sergeiionin.timewindows
 
 import cats.effect.{Async, Ref, Resource}
 import cats.implicits.catsSyntaxFlatMapOps
 import cats.syntax.functor._
-import com.sergeiionin.WindowRecordsAggregatorService
-import com.sergeiionin.WindowRecordsAggregatorService.ChunksMap
+import io.github.sergeiionin.WindowRecordsAggregatorService
+import io.github.sergeiionin.WindowRecordsAggregatorService.ChunksMap
 import fs2.Chunk
 import fs2.kafka.CommittableConsumerRecord
 import wvlet.log.Logger

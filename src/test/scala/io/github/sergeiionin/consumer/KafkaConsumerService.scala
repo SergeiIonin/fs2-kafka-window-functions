@@ -1,4 +1,4 @@
-package com.sergeiionin.consumer
+package io.github.sergeiionin.consumer
 
 import cats.data.NonEmptyList
 import cats.effect.Async

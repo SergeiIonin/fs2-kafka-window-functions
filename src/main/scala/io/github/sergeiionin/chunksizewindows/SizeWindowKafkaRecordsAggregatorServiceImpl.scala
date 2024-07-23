@@ -1,15 +1,15 @@
-package com.sergeiionin.chunksizewindows
+package io.github.sergeiionin.chunksizewindows
 
 import cats.effect.{Async, Ref, Resource}
 import cats.syntax.functor._
-import com.sergeiionin.WindowRecordsAggregatorService
-import com.sergeiionin.WindowRecordsAggregatorService.ChunksMap
+import io.github.sergeiionin.WindowRecordsAggregatorService
+import io.github.sergeiionin.WindowRecordsAggregatorService.ChunksMap
 import fs2.Chunk
 import fs2.kafka.CommittableConsumerRecord
 import wvlet.log.Logger
 
 // chunkNumberRef holds the number of the chunk to which the record is attributed, after the cleanup,
-// all chunks which are filled will be released and deleted
+// all filled chunks will be released and deleted
 
 class SizeWindowKafkaRecordsAggregatorServiceImpl[F[_]: Async, K, V](
   chunkSize:    Int,

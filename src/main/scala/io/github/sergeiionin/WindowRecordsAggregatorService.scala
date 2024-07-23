@@ -1,12 +1,12 @@
-package com.sergeiionin
+package io.github.sergeiionin
 
 import cats.effect.implicits.genSpawnOps
 import cats.effect.std.Semaphore
 import cats.effect.{Async, Ref, Resource}
 import cats.implicits.{catsSyntaxFlatMapOps, catsSyntaxFlatten, toFunctorOps, toTraverseOps}
 import cats.syntax.flatMap._
-import com.sergeiionin.WindowRecordsAggregatorService.ChunksMap
 import fs2.Chunk
+import io.github.sergeiionin.WindowRecordsAggregatorService.ChunksMap
 import wvlet.log.Logger
 
 import scala.concurrent.duration.{FiniteDuration, MILLISECONDS}

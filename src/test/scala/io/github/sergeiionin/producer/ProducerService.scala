@@ -1,4 +1,4 @@
-package com.sergeiionin.producer
+package io.github.sergeiionin.producer
 
 import fs2.kafka.ProducerResult
 

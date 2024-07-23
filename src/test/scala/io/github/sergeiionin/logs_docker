@@ -1,0 +1,35 @@
+2023-03-27 18:21:17.356-0300  info [Metadata] [Producer clientId=producer-1] Cluster ID: G9OrQzS6Qza1L_1H8wQIng
+2023-03-27 18:21:17.374-0300  warn [ConsumerConfig] The configuration 'value.serializer' was supplied but isn't a known config.
+2023-03-27 18:21:17.375-0300  warn [ConsumerConfig] The configuration 'key.serializer' was supplied but isn't a known config.
+2023-03-27 18:21:17.375-0300  info [AppInfoParser] Kafka version: 3.1.0
+2023-03-27 18:21:17.375-0300  info [AppInfoParser] Kafka commitId: 37edeed0777bacb3
+2023-03-27 18:21:17.375-0300  info [AppInfoParser] Kafka startTimeMs: 1679952077375
+2023-03-27 18:21:17.626-0300  info [KafkaConsumer] [Consumer clientId=consumer-test_group-1, groupId=test_group] Subscribed to topic(s): topic-0
+2023-03-27 18:21:17.651-0300  warn [NetworkClient] [Producer clientId=producer-1] Error while fetching metadata with correlation id 3 : {topic-0=LEADER_NOT_AVAILABLE}
+2023-03-27 18:21:17.761-0300  info [Metadata] [Producer clientId=producer-1] Resetting the last seen epoch of partition topic-0-0 to 0 since the associated topicId changed from null to hhxFpZ7FQN2n85HUTFm3Pw
+2023-03-27 18:21:17.857-0300  info [WindowFuncsSpec] records produced are List(key-0) -> List(1679952077783)  - (WindowFuncsSpec.scala:40)
+2023-03-27 18:21:17.878-0300  info [WindowFuncsSpec] records produced are List(key-1) -> List(1679952077874)  - (WindowFuncsSpec.scala:40)
+2023-03-27 18:21:17.905-0300  info [WindowFuncsSpec] records produced are List(key-2) -> List(1679952077896)  - (WindowFuncsSpec.scala:40)
+2023-03-27 18:21:17.925-0300  info [Metadata] [Consumer clientId=consumer-test_group-1, groupId=test_group] Resetting the last seen epoch of partition topic-0-0 to 0 since the associated topicId changed from null to hhxFpZ7FQN2n85HUTFm3Pw
+2023-03-27 18:21:17.926-0300  info [WindowFuncsSpec] records produced are List(key-3) -> List(1679952077919)  - (WindowFuncsSpec.scala:40)
+2023-03-27 18:21:17.926-0300  info [Metadata] [Consumer clientId=consumer-test_group-1, groupId=test_group] Cluster ID: G9OrQzS6Qza1L_1H8wQIng
+2023-03-27 18:21:17.944-0300  info [WindowFuncsSpec] records produced are List(key-4) -> List(1679952077940)  - (WindowFuncsSpec.scala:40)
+2023-03-27 18:21:17.959-0300  info [WindowFuncsSpec] records produced are List(key-5) -> List(1679952077955)  - (WindowFuncsSpec.scala:40)
+2023-03-27 18:21:17.975-0300  info [WindowFuncsSpec] records produced are List(key-6) -> List(1679952077972)  - (WindowFuncsSpec.scala:40)
+2023-03-27 18:21:17.982-0300  info [ConsumerCoordinator] [Consumer clientId=consumer-test_group-1, groupId=test_group] Discovered group coordinator localhost:63124 (id: 2147483646 rack: null)
+2023-03-27 18:21:17.984-0300  info [ConsumerCoordinator] [Consumer clientId=consumer-test_group-1, groupId=test_group] (Re-)joining group
+2023-03-27 18:21:17.996-0300  info [WindowFuncsSpec] records produced are List(key-7) -> List(1679952077991)  - (WindowFuncsSpec.scala:40)
+2023-03-27 18:21:18.005-0300  info [ConsumerCoordinator] [Consumer clientId=consumer-test_group-1, groupId=test_group] Request joining group due to: need to re-join with the given member-id
+2023-03-27 18:21:18.006-0300  info [ConsumerCoordinator] [Consumer clientId=consumer-test_group-1, groupId=test_group] (Re-)joining group
+2023-03-27 18:21:18.016-0300  info [WindowFuncsSpec] records produced are List(key-8) -> List(1679952078009)  - (WindowFuncsSpec.scala:40)
+2023-03-27 18:21:18.021-0300  info [ConsumerCoordinator] [Consumer clientId=consumer-test_group-1, groupId=test_group] Successfully joined group with generation Generation{generationId=1, memberId='consumer-test_group-1-c5458804-f53c-41c5-bf9c-04b272a7856d', protocol='range'}
+2023-03-27 18:21:18.030-0300  info [ConsumerCoordinator] [Consumer clientId=consumer-test_group-1, groupId=test_group] Finished assignment for group at generation 1: {consumer-test_group-1-c5458804-f53c-41c5-bf9c-04b272a7856d=Assignment(partitions=[topic-0-0])}
+2023-03-27 18:21:18.039-0300  info [WindowFuncsSpec] records produced are List(key-9) -> List(1679952078030)  - (WindowFuncsSpec.scala:40)
+2023-03-27 18:21:18.050-0300  info [ConsumerCoordinator] [Consumer clientId=consumer-test_group-1, groupId=test_group] Successfully synced group in generation Generation{generationId=1, memberId='consumer-test_group-1-c5458804-f53c-41c5-bf9c-04b272a7856d', protocol='range'}
+2023-03-27 18:21:18.051-0300  info [ConsumerCoordinator] [Consumer clientId=consumer-test_group-1, groupId=test_group] Notifying assignor about the new Assignment(partitions=[topic-0-0])
+2023-03-27 18:21:18.053-0300  info [ConsumerCoordinator] [Consumer clientId=consumer-test_group-1, groupId=test_group] Adding newly assigned partitions: topic-0-0
+2023-03-27 18:21:18.055-0300  info [WindowFuncsSpec] records produced are List(key-10) -> List(1679952078050)  - (WindowFuncsSpec.scala:40)
+2023-03-27 18:21:18.074-0300  info [WindowFuncsSpec] records produced are List(key-11) -> List(1679952078068)  - (WindowFuncsSpec.scala:40)
+2023-03-27 18:21:18.095-0300  info [WindowFuncsSpec] records produced are List(key-12) -> List(1679952078089)  - (WindowFuncsSpec.scala:40)
+2023-03-27 18:21:18.100-0300  info [ConsumerCoordinator] [Consumer clientId=consumer-test_group-1, groupId=test_group] Found no committed offset for partition topic-0-0
+2023-03-27 18:21:18.118-0300  info [SubscriptionState] [Consumer clientId=consumer-test_group-1, groupId=test_group] Resetting offset for partition topic-0-0 to position FetchPosition{offset=0, offsetEpoch=Optional.empty, currentLeader=LeaderAndEpoch{leader=Optional[localhost:63124 (id: 1 rack: null)], epoch=0}}.

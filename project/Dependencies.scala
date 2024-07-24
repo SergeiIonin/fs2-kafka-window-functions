@@ -15,12 +15,11 @@ object Dependencies {
   }
 
   private object Cats {
-
       private val kindProjectorVersion = "0.13.2"
       private val catsCoreVersion = "2.7.0"
       private val log4catsSlf4jVersion = "2.2.0"
       private val taglessVersion = "0.14.0"
-      private val catsEffectVersion = "3.4.8"
+      private val catsEffectVersion = "3.5.4"
       private val catsMtlVersion = "1.2.1"
 
       private val kindProjector = "org.typelevel" %% "kind-projector" % kindProjectorVersion
